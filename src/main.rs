@@ -7,9 +7,9 @@ use std::ffi::c_void;
  
  use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    CreateFontW, CreateSolidBrush, DeleteObject, GetStockObject, SetBkColor, SetTextColor, CLIP_DEFAULT_PRECIS,
-    CLEARTYPE_QUALITY, DEFAULT_CHARSET, DEFAULT_PITCH, FF_DONTCARE, FW_NORMAL, HBRUSH, HDC, OUT_DEFAULT_PRECIS,
-    WHITE_BRUSH,
+    CreateFontIndirectW, CreateFontW, CreateSolidBrush, DeleteObject, GetStockObject, GetTextMetricsW, SelectObject, SetBkColor,
+    SetTextColor, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_CHARSET, DEFAULT_PITCH, FF_DONTCARE, FW_NORMAL, HBRUSH, HDC,
+    LOGFONTW, OUT_DEFAULT_PRECIS, TEXTMETRICW, WHITE_BRUSH,
 };
  use windows_sys::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
  use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, LoadLibraryW};
@@ -17,8 +17,9 @@ use windows_sys::Win32::Graphics::Gdi::{
      InitCommonControlsEx, INITCOMMONCONTROLSEX, ICC_STANDARD_CLASSES, SB_SETTEXTW, STATUSCLASSNAMEW,
      TCM_GETCURSEL, TCM_INSERTITEMW, TCITEMW, TCN_SELCHANGE, TVGN_CARET, TVI_ROOT, TVIF_PARAM,
      TVIF_TEXT, TVINSERTSTRUCTW, TVITEMEXW, TVM_DELETEITEM, TVM_INSERTITEMW, TVM_SELECTITEM,
-     TVHITTESTINFO, TVM_EDITLABELW, TVM_GETITEMW, TVM_GETNEXTITEM, TVM_HITTEST, TVM_SETBKCOLOR, TVM_SETLINECOLOR,
-     TVM_SETTEXTCOLOR, TVN_BEGINDRAGW, TVN_ENDLABELEDITW, TVN_SELCHANGEDW, TVS_EDITLABELS, TVS_FULLROWSELECT,
+    TVHITTESTINFO, TVM_EDITLABELW, TVM_GETITEMW, TVM_GETNEXTITEM, TVM_HITTEST, TVM_SETBKCOLOR, TVM_SETEXTENDEDSTYLE,
+    TVM_SETITEMHEIGHT, TVM_SETLINECOLOR, TVM_SETTEXTCOLOR, TVN_BEGINDRAGW, TVN_ENDLABELEDITW, TVN_SELCHANGEDW, TVS_EDITLABELS,
+    TVS_EX_DOUBLEBUFFER, TVS_FULLROWSELECT,
      TVS_HASLINES, TVS_LINESATROOT, TVS_SHOWSELALWAYS, WC_TABCONTROLW, WC_TREEVIEWW, NMTVDISPINFOW, SB_SETPARTS,
  };
 use windows::Win32::UI::Controls::RichEdit::{
@@ -26,11 +27,15 @@ use windows::Win32::UI::Controls::RichEdit::{
 };
 use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
  use windows_sys::Win32::UI::WindowsAndMessaging::{
-     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, GetParent, LoadCursorW, LoadIconW, SetCursor,
-     AppendMenuW, CreateMenu, CreatePopupMenu, DestroyWindow, DrawMenuBar, PostQuitMessage,
-     RegisterClassExW, SendMessageW, SetMenu, SetWindowLongPtrW, ShowWindow, TranslateMessage,
-     CW_USEDEFAULT, GWLP_USERDATA, HMENU, IDC_ARROW, IDC_SIZEWE, IDI_APPLICATION, MF_POPUP, MF_STRING, MSG, SW_SHOW, WM_COMMAND,
-     WM_CREATE, WM_CTLCOLORDLG, WM_CTLCOLOREDIT, WM_CTLCOLORSTATIC, WM_DESTROY, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCCREATE, WM_NOTIFY, WM_SETCURSOR, WM_SETFONT, WM_SIZE, WM_TIMER,
+    AppendMenuW, BeginDeferWindowPos, CreateMenu, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DeferWindowPos, DestroyWindow,
+    DispatchMessageW, DrawMenuBar, EndDeferWindowPos, GetClientRect, GetMessageW, GetParent, LoadCursorW, LoadIconW, PostQuitMessage,
+    RegisterClassExW, SendMessageW, SetCursor, SetMenu, SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW,
+    TranslateMessage, CS_DBLCLKS, CW_USEDEFAULT, GWLP_USERDATA, HMENU,
+    ICON_BIG, ICON_SMALL, IDC_ARROW, IDC_SIZEWE, IDI_APPLICATION, MF_POPUP, MF_STRING, MSG, NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS,
+    SW_SHOW,
+    SWP_NOACTIVATE, SWP_NOZORDER, WM_COMMAND, WM_CREATE, WM_CTLCOLORDLG, WM_CTLCOLOREDIT,
+    WM_CTLCOLORSTATIC, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
+    WM_MOUSEMOVE, WM_NCCREATE, WM_NOTIFY, WM_SETCURSOR, WM_SETFONT, WM_SETICON, WM_SIZE, WM_TIMER,
      WS_EX_CLIENTEDGE,
      ES_AUTOVSCROLL, ES_AUTOHSCROLL, ES_MULTILINE, EN_CHANGE, GetWindowTextLengthW,
      GetWindowTextW, KillTimer, SetTimer, SetWindowTextW, WS_HSCROLL, WS_VSCROLL,
@@ -52,9 +57,22 @@ extern "system" {
     fn ScreenToClient(hWnd: isize, lpPoint: *mut windows_sys::Win32::Foundation::POINT) -> i32;
     fn FillRect(hDC: isize, lprc: *const windows_sys::Win32::Foundation::RECT, hbr: isize) -> i32;
     fn InvalidateRect(hWnd: isize, lpRect: *const windows_sys::Win32::Foundation::RECT, bErase: i32) -> i32;
+    fn GetDC(hWnd: isize) -> isize;
+    fn ReleaseDC(hWnd: isize, hDC: isize) -> i32;
+    fn GetSysColor(nIndex: i32) -> u32;
+    fn TrackMouseEvent(lpEventTrack: *mut TRACKMOUSEEVENT) -> i32;
     fn GetKeyState(nVirtKey: i32) -> i16;
     fn SetFocus(hWnd: isize) -> isize;
     fn GetFocus() -> isize;
+}
+
+#[repr(C)]
+#[allow(non_snake_case)]
+struct TRACKMOUSEEVENT {
+    cbSize: u32,
+    dwFlags: u32,
+    hwndTrack: HWND,
+    dwHoverTime: u32,
 }
 
 #[link(name = "dwmapi")]
@@ -70,6 +88,14 @@ extern "system" {
  const APP_CLASS: &str = "NovelOutlineToolMainWindow";
  const SPLITTER_CLASS: &str = "NovelOutlineToolSplitter";
  const APP_TITLE: &str = "Novel Outline Tool";
+const IDI_APPICON: u16 = 101;
+const WM_MOUSELEAVE: u32 = 0x02A3;
+const TME_LEAVE: u32 = 0x00000002;
+const COLOR_WINDOW: i32 = 5;
+const COLOR_WINDOWTEXT: i32 = 8;
+const COLOR_3DFACE: i32 = 15;
+const COLOR_3DSHADOW: i32 = 16;
+const COLOR_3DDKSHADOW: i32 = 21;
  const TREE_ID: isize = 1001;
  const EDIT_ID: isize = 1002;
  const STATUS_ID: isize = 1003;
@@ -78,6 +104,8 @@ extern "system" {
  const TIMER_HIGHLIGHT: usize = 2;
  const TIMER_SEARCH: usize = 3;
  const SEARCH_ID: isize = 1005;
+const SPLITTER_DRAGGING: isize = 1;
+const SPLITTER_HOVER: isize = 2;
  const SPLITTER_ID: isize = 1006;
  
  const EM_GETSEL_MSG: u32 = 0x00B0;
@@ -161,8 +189,11 @@ impl Command {
     hwnd_splitter: HWND,
     hfont_ui: isize,
     left_pane_ratio: f32,
-    hbr_light: HBRUSH,
-    hbr_dark: HBRUSH,
+    theme_bg: u32,
+    theme_panel_bg: u32,
+    theme_fg: u32,
+    hbr_bg: HBRUSH,
+    hbr_panel: HBRUSH,
      project: Option<Project>,
      current_section: Section,
      item_paths: Vec<PathBuf>,
@@ -170,6 +201,7 @@ impl Command {
      current_doc_dirty: bool,
      filter_text: String,
      last_highlight_line: i32,
+    last_highlight_bold: bool,
     undo_stack: Vec<Command>,
     redo_stack: Vec<Command>,
     dragging: bool,
@@ -217,7 +249,10 @@ impl Command {
  
          let class_name = wide(APP_CLASS);
          let cursor = LoadCursorW(0, IDC_ARROW);
-        let icon = LoadIconW(0, IDI_APPLICATION);
+        let icon = {
+            let h = LoadIconW(hinstance, make_int_resource(IDI_APPICON));
+            if h != 0 { h } else { LoadIconW(0, IDI_APPLICATION) }
+        };
          let hbr_background: HBRUSH = GetStockObject(WHITE_BRUSH as i32) as HBRUSH;
  
          let wc = WNDCLASSEXW {
@@ -243,7 +278,7 @@ impl Command {
          let splitter_class = wide(SPLITTER_CLASS);
          let wc_splitter = WNDCLASSEXW {
              cbSize: size_of::<WNDCLASSEXW>() as u32,
-             style: 0,
+            style: CS_DBLCLKS,
              lpfnWndProc: Some(splitter_proc),
              cbClsExtra: 0,
              cbWndExtra: 0,
@@ -315,8 +350,11 @@ impl Command {
                 hwnd_splitter: 0,
                 hfont_ui: 0,
                 left_pane_ratio: 0.28,
-                hbr_light: 0,
-                hbr_dark: 0,
+                theme_bg: 0,
+                theme_panel_bg: 0,
+                theme_fg: 0,
+                hbr_bg: 0,
+                hbr_panel: 0,
                  project: None,
                  current_section: Section::Chapters,
                  item_paths: Vec::new(),
@@ -324,6 +362,7 @@ impl Command {
                  current_doc_dirty: false,
                  filter_text: String::new(),
                  last_highlight_line: -1,
+                last_highlight_bold: false,
                  undo_stack: Vec::new(),
                  redo_stack: Vec::new(),
                  dragging: false,
@@ -336,6 +375,12 @@ impl Command {
          }
          WM_CREATE => {
              let state = state(hwnd);
+
+            let icon = LoadIconW(GetModuleHandleW(null()), make_int_resource(IDI_APPICON));
+            if icon != 0 {
+                SendMessageW(hwnd, WM_SETICON, ICON_BIG as usize, icon as LPARAM);
+                SendMessageW(hwnd, WM_SETICON, ICON_SMALL as usize, icon as LPARAM);
+            }
  
              let menu = CreateMenu();
              let file_menu = CreatePopupMenu();
@@ -444,6 +489,12 @@ impl Command {
                  GetModuleHandleW(null()),
                  null_mut(),
              );
+            SendMessageW(
+                state.hwnd_tree,
+                TVM_SETEXTENDEDSTYLE,
+                TVS_EX_DOUBLEBUFFER as usize,
+                TVS_EX_DOUBLEBUFFER as LPARAM,
+            );
 
              state.hwnd_splitter = CreateWindowExW(
                  0,
@@ -489,10 +540,8 @@ impl Command {
                  EC_LEFTMARGIN | EC_RIGHTMARGIN,
                  make_lparam_u16(margin, margin),
              );
- 
-             state.hbr_light = CreateSolidBrush(0x00FFFFFF);
-             state.hbr_dark = CreateSolidBrush(0x00202020);
-             apply_theme(hwnd, state.dark_mode);
+
+            apply_theme(hwnd, state.dark_mode);
  
              state.hfont_ui = create_ui_font(hwnd);
              apply_ui_font(hwnd, state.hfont_ui);
@@ -546,6 +595,7 @@ impl Command {
                                  state.current_doc_dirty = false;
                                  state.filter_text.clear();
                                  state.last_highlight_line = -1;
+                                state.last_highlight_bold = false;
                                  state.undo_stack.clear();
                                  state.redo_stack.clear();
                                  state.dragging = false;
@@ -641,17 +691,19 @@ impl Command {
                  _ => DefWindowProcW(hwnd, msg, wparam, lparam),
              }
          }
-        WM_CTLCOLORDLG | WM_CTLCOLOREDIT | WM_CTLCOLORSTATIC => {
+        WM_CTLCOLOREDIT => {
             let state = state(hwnd);
             let hdc = wparam as HDC;
-            let (bg, fg, hbr) = if state.dark_mode {
-                (0x00202020u32, 0x00E0E0E0u32, state.hbr_dark)
-            } else {
-                (0x00FFFFFFu32, 0x00000000u32, state.hbr_light)
-            };
-            SetBkColor(hdc, bg);
-            SetTextColor(hdc, fg);
-            hbr as LRESULT
+            SetBkColor(hdc, state.theme_bg);
+            SetTextColor(hdc, state.theme_fg);
+            state.hbr_bg as LRESULT
+        }
+        WM_CTLCOLORDLG | WM_CTLCOLORSTATIC => {
+            let state = state(hwnd);
+            let hdc = wparam as HDC;
+            SetBkColor(hdc, state.theme_panel_bg);
+            SetTextColor(hdc, state.theme_fg);
+            state.hbr_panel as LRESULT
         }
         WM_ERASEBKGND => {
             let state = state(hwnd);
@@ -663,8 +715,7 @@ impl Command {
                 bottom: 0,
             };
             GetClientRect(hwnd, &mut rc);
-            let hbr = if state.dark_mode { state.hbr_dark } else { state.hbr_light };
-            FillRect(hdc, &rc, hbr);
+            FillRect(hdc, &rc, state.hbr_panel);
             1
         }
         WM_KEYDOWN => {
@@ -789,6 +840,48 @@ impl Command {
              }
              0
          }
+        WM_DPICHANGED => {
+            let suggested = lparam as *const windows_sys::Win32::Foundation::RECT;
+            if !suggested.is_null() {
+                let rc = &*suggested;
+                let _ = SetWindowPos(
+                    hwnd,
+                    0,
+                    rc.left,
+                    rc.top,
+                    rc.right - rc.left,
+                    rc.bottom - rc.top,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+            }
+
+            let state = state(hwnd);
+            if state.hfont_ui != 0 {
+                let _ = DeleteObject(state.hfont_ui);
+                state.hfont_ui = 0;
+            }
+            state.hfont_ui = create_ui_font(hwnd);
+            apply_ui_font(hwnd, state.hfont_ui);
+
+            let dpi = GetDpiForWindow(hwnd);
+            let margin = scale_px(dpi, 6);
+            SendMessageW(
+                state.hwnd_search,
+                EM_SETMARGINS_MSG,
+                EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                make_lparam_u16(margin, margin),
+            );
+            let margin = scale_px(dpi, 12);
+            SendMessageW(
+                state.hwnd_edit,
+                EM_SETMARGINS_MSG,
+                EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                make_lparam_u16(margin, margin),
+            );
+
+            layout(hwnd);
+            0
+        }
          WM_SIZE => {
              layout(hwnd);
              0
@@ -820,13 +913,13 @@ impl Command {
                      let _ = DeleteObject((*ptr).hfont_ui);
                      (*ptr).hfont_ui = 0;
                  }
-                 if (*ptr).hbr_light != 0 {
-                     let _ = DeleteObject((*ptr).hbr_light);
-                     (*ptr).hbr_light = 0;
-                 }
-                 if (*ptr).hbr_dark != 0 {
-                     let _ = DeleteObject((*ptr).hbr_dark);
-                     (*ptr).hbr_dark = 0;
+                if (*ptr).hbr_bg != 0 {
+                    let _ = DeleteObject((*ptr).hbr_bg);
+                    (*ptr).hbr_bg = 0;
+                }
+                if (*ptr).hbr_panel != 0 {
+                    let _ = DeleteObject((*ptr).hbr_panel);
+                    (*ptr).hbr_panel = 0;
                  }
                  drop(Box::from_raw(ptr));
              }
@@ -852,8 +945,59 @@ fn make_lparam_u16(lo: i32, hi: i32) -> LPARAM {
     ((lo | (hi << 16)) as isize) as LPARAM
 }
 
+fn make_int_resource(id: u16) -> *const u16 {
+    id as usize as *const u16
+}
+
+unsafe fn get_font_height_px(hwnd: HWND, hfont: isize) -> i32 {
+    let hdc = GetDC(hwnd);
+    if hdc == 0 || hfont == 0 {
+        return scale_px(GetDpiForWindow(hwnd), 16);
+    }
+    let old = SelectObject(hdc, hfont);
+    let mut tm = MaybeUninit::<TEXTMETRICW>::zeroed();
+    let ok = GetTextMetricsW(hdc, tm.as_mut_ptr());
+    let _ = SelectObject(hdc, old);
+    let _ = ReleaseDC(hwnd, hdc);
+    if ok == 0 {
+        return scale_px(GetDpiForWindow(hwnd), 16);
+    }
+    let tm = tm.assume_init();
+    (tm.tmHeight as i32 + tm.tmExternalLeading as i32).max(1)
+}
+
 unsafe fn create_ui_font(hwnd: HWND) -> isize {
     let dpi = GetDpiForWindow(hwnd) as i32;
+
+    let mut ncm = MaybeUninit::<NONCLIENTMETRICSW>::zeroed().assume_init();
+    ncm.cbSize = size_of::<NONCLIENTMETRICSW>() as u32;
+    let mut ok = SystemParametersInfoW(
+        SPI_GETNONCLIENTMETRICS,
+        ncm.cbSize,
+        &mut ncm as *mut _ as *mut c_void,
+        0,
+    );
+    if ok == 0 {
+        let alt = (size_of::<NONCLIENTMETRICSW>() - size_of::<i32>()) as u32;
+        ncm.cbSize = alt;
+        ok = SystemParametersInfoW(
+            SPI_GETNONCLIENTMETRICS,
+            ncm.cbSize,
+            &mut ncm as *mut _ as *mut c_void,
+            0,
+        );
+    }
+
+    if ok != 0 {
+        let mut lf: LOGFONTW = ncm.lfMessageFont;
+        lf.lfHeight = ((lf.lfHeight as i64 * dpi as i64) / 96) as i32;
+        lf.lfWidth = ((lf.lfWidth as i64 * dpi as i64) / 96) as i32;
+        let hfont = CreateFontIndirectW(&lf) as isize;
+        if hfont != 0 {
+            return hfont;
+        }
+    }
+
     let height = -((9 * dpi + 36) / 72);
     let face = wide("Segoe UI");
     CreateFontW(
@@ -885,38 +1029,77 @@ unsafe fn apply_ui_font(hwnd: HWND, hfont: isize) {
             SendMessageW(c, WM_SETFONT, hfont as usize, 1);
         }
     }
+    if state.hwnd_tree != 0 {
+        let dpi = GetDpiForWindow(hwnd);
+        let item_h = scale_px(dpi, 24).max(18);
+        SendMessageW(state.hwnd_tree, TVM_SETITEMHEIGHT, item_h as usize, 0);
+    }
 }
 
 unsafe extern "system" fn splitter_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_LBUTTONDOWN => {
             SetCapture(hwnd);
-            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 1);
+            let flags = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, flags | SPLITTER_DRAGGING);
+            InvalidateRect(hwnd, null(), 1);
+            0
+        }
+        WM_LBUTTONDBLCLK => {
+            let parent = GetParent(hwnd);
+            if parent != 0 {
+                state(parent).left_pane_ratio = 0.28;
+                persist_left_pane_ratio(parent);
+                layout(parent);
+            }
             0
         }
         WM_MOUSEMOVE => {
-            if windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA) == 0 {
-                return DefWindowProcW(hwnd, msg, wparam, lparam);
-            }
             let parent = GetParent(hwnd);
-            if parent != 0 {
-                let mut pt = windows_sys::Win32::Foundation::POINT { x: 0, y: 0 };
-                if GetCursorPos(&mut pt) != 0 {
-                    ScreenToClient(parent, &mut pt);
-                    set_left_pane_from_px(parent, pt.x);
-                    layout(parent);
+            let flags = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+            if (flags & SPLITTER_DRAGGING) != 0 {
+                if parent != 0 {
+                    let mut pt = windows_sys::Win32::Foundation::POINT { x: 0, y: 0 };
+                    if GetCursorPos(&mut pt) != 0 {
+                        ScreenToClient(parent, &mut pt);
+                        set_left_pane_from_px(parent, pt.x);
+                        layout(parent);
+                    }
                 }
+                return 0;
+            }
+
+            if (flags & SPLITTER_HOVER) == 0 {
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, flags | SPLITTER_HOVER);
+                let mut tme = TRACKMOUSEEVENT {
+                    cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
+                    dwFlags: TME_LEAVE,
+                    hwndTrack: hwnd,
+                    dwHoverTime: 0,
+                };
+                let _ = TrackMouseEvent(&mut tme);
+                InvalidateRect(hwnd, null(), 1);
+            }
+            0
+        }
+        WM_MOUSELEAVE => {
+            let flags = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+            if (flags & SPLITTER_HOVER) != 0 {
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, flags & !SPLITTER_HOVER);
+                InvalidateRect(hwnd, null(), 1);
             }
             0
         }
         WM_LBUTTONUP => {
-            if windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA) != 0 {
+            let flags = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+            if (flags & SPLITTER_DRAGGING) != 0 {
                 ReleaseCapture();
-                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, flags & !SPLITTER_DRAGGING);
                 let parent = GetParent(hwnd);
                 if parent != 0 {
                     persist_left_pane_ratio(parent);
                 }
+                InvalidateRect(hwnd, null(), 1);
             }
             0
         }
@@ -936,8 +1119,28 @@ unsafe extern "system" fn splitter_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lp
                     bottom: 0,
                 };
                 GetClientRect(hwnd, &mut rc);
-                let hbr = if st.dark_mode { st.hbr_dark } else { st.hbr_light };
-                FillRect(hdc, &rc, hbr);
+                FillRect(hdc, &rc, st.hbr_panel);
+
+                let flags = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+                let mut line = if st.dark_mode { 0x00303030 } else { GetSysColor(COLOR_3DSHADOW) };
+                if (flags & (SPLITTER_HOVER | SPLITTER_DRAGGING)) != 0 {
+                    line = if st.dark_mode { 0x00404040 } else { GetSysColor(COLOR_3DDKSHADOW) };
+                }
+
+                let dpi = GetDpiForWindow(parent);
+                let lw = scale_px(dpi, 1).max(1);
+                let cx = (rc.right - rc.left) / 2;
+                let line_rc = windows_sys::Win32::Foundation::RECT {
+                    left: cx,
+                    top: rc.top,
+                    right: cx + lw,
+                    bottom: rc.bottom,
+                };
+                let hbr = CreateSolidBrush(line);
+                if hbr != 0 {
+                    FillRect(hdc, &line_rc, hbr);
+                    let _ = DeleteObject(hbr);
+                }
                 return 1;
             }
             DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -1016,20 +1219,88 @@ unsafe fn persist_left_pane_ratio(hwnd: HWND) {
     let max_left = (width - min_right - splitter_w).max(min_left);
     left_width = left_width.clamp(min_left, max_left);
     let right_width = width - left_width - splitter_w;
-    let tabs_height = scale_px(dpi, 32);
-    let search_height = scale_px(dpi, 28);
- 
-     if state.hwnd_tabs != 0 {
-         windows_sys::Win32::UI::WindowsAndMessaging::MoveWindow(
-             state.hwnd_tabs,
+    let font_h = get_font_height_px(hwnd, state.hfont_ui);
+    let tabs_height = (font_h + scale_px(dpi, 14)).max(scale_px(dpi, 30));
+    let search_height = (font_h + scale_px(dpi, 10)).max(scale_px(dpi, 26));
+
+    let tree_y = padding + tabs_height + gap + search_height + gap;
+    let flags = SWP_NOZORDER | SWP_NOACTIVATE;
+    let mut hdwp = BeginDeferWindowPos(5);
+    if hdwp != 0 {
+        if state.hwnd_tabs != 0 {
+            hdwp = DeferWindowPos(
+                hdwp,
+                state.hwnd_tabs,
+                0,
+                padding,
+                padding,
+                (left_width - padding * 2).max(0),
+                tabs_height,
+                flags,
+            );
+        }
+        if state.hwnd_search != 0 {
+            hdwp = DeferWindowPos(
+                hdwp,
+                state.hwnd_search,
+                0,
+                padding,
+                padding + tabs_height + gap,
+                (left_width - padding * 2).max(0),
+                search_height,
+                flags,
+            );
+        }
+        if state.hwnd_tree != 0 {
+            hdwp = DeferWindowPos(
+                hdwp,
+                state.hwnd_tree,
+                0,
+                padding,
+                tree_y,
+                (left_width - padding * 2).max(0),
+                (height - tree_y - padding).max(0),
+                flags,
+            );
+        }
+        if state.hwnd_edit != 0 {
+            hdwp = DeferWindowPos(
+                hdwp,
+                state.hwnd_edit,
+                0,
+                left_width + splitter_w + padding,
+                padding,
+                (right_width - padding * 2).max(0),
+                (height - padding * 2).max(0),
+                flags,
+            );
+        }
+        if state.hwnd_splitter != 0 {
+            hdwp = DeferWindowPos(
+                hdwp,
+                state.hwnd_splitter,
+                0,
+                left_width,
+                padding,
+                splitter_w.max(1),
+                (height - padding * 2).max(0),
+                flags,
+            );
+        }
+        let _ = EndDeferWindowPos(hdwp);
+        return;
+    }
+
+    if state.hwnd_tabs != 0 {
+        windows_sys::Win32::UI::WindowsAndMessaging::MoveWindow(
+            state.hwnd_tabs,
             padding,
             padding,
             (left_width - padding * 2).max(0),
-             tabs_height,
-             1,
-         );
-     }
-
+            tabs_height,
+            1,
+        );
+    }
     if state.hwnd_search != 0 {
         windows_sys::Win32::UI::WindowsAndMessaging::MoveWindow(
             state.hwnd_search,
@@ -1040,30 +1311,26 @@ unsafe fn persist_left_pane_ratio(hwnd: HWND) {
             1,
         );
     }
-
-     if state.hwnd_tree != 0 {
-        let tree_y = padding + tabs_height + gap + search_height + gap;
-         windows_sys::Win32::UI::WindowsAndMessaging::MoveWindow(
-             state.hwnd_tree,
+    if state.hwnd_tree != 0 {
+        windows_sys::Win32::UI::WindowsAndMessaging::MoveWindow(
+            state.hwnd_tree,
             padding,
             tree_y,
             (left_width - padding * 2).max(0),
             (height - tree_y - padding).max(0),
-             1,
-         );
-     }
- 
-     if state.hwnd_edit != 0 {
-         windows_sys::Win32::UI::WindowsAndMessaging::MoveWindow(
-             state.hwnd_edit,
+            1,
+        );
+    }
+    if state.hwnd_edit != 0 {
+        windows_sys::Win32::UI::WindowsAndMessaging::MoveWindow(
+            state.hwnd_edit,
             left_width + splitter_w + padding,
             padding,
             (right_width - padding * 2).max(0),
             (height - padding * 2).max(0),
-             1,
-         );
-     }
-
+            1,
+        );
+    }
     if state.hwnd_splitter != 0 {
         windows_sys::Win32::UI::WindowsAndMessaging::MoveWindow(
             state.hwnd_splitter,
@@ -1273,13 +1540,17 @@ unsafe fn highlight_current_line(hwnd: HWND) {
     );
 
     let line = SendMessageW(edit, EM_LINEFROMCHAR_MSG, sel_start as usize, 0) as i32;
-    if state.last_highlight_line != -1 && state.last_highlight_line != line {
-        apply_line_bold(edit, state.last_highlight_line, false);
+    let heading = line_starts_with(edit, line, "#");
+    if state.last_highlight_line == line && state.last_highlight_bold == heading {
+        return;
     }
 
-    let heading = line_starts_with(edit, line, "#");
+    if state.last_highlight_line != -1 && state.last_highlight_line != line && state.last_highlight_bold {
+        apply_line_bold(edit, state.last_highlight_line, false);
+    }
     apply_line_bold(edit, line, heading);
     state.last_highlight_line = line;
+    state.last_highlight_bold = heading;
 
     SendMessageW(edit, EM_SETSEL_MSG, sel_start as usize, sel_end as LPARAM);
 }
@@ -1347,6 +1618,39 @@ unsafe fn set_status_part(hwnd: HWND, part: usize, text: &str) {
     SendMessageW(state.hwnd_status, SB_SETTEXTW, part, t.as_ptr() as LPARAM);
  }
  
+unsafe fn theme_palette(dark: bool) -> (u32, u32, u32, u32) {
+    if dark {
+        (0x00202020u32, 0x00262626u32, 0x00E0E0E0u32, 0x00303030u32)
+    } else {
+        let bg = GetSysColor(COLOR_WINDOW);
+        let fg = GetSysColor(COLOR_WINDOWTEXT);
+        let panel = GetSysColor(COLOR_3DFACE);
+        let line = GetSysColor(COLOR_3DSHADOW);
+        (bg, panel, fg, line)
+    }
+}
+
+unsafe fn update_theme_resources(hwnd: HWND, dark: bool) -> (u32, u32, u32, u32) {
+    let (bg, panel, fg, line) = theme_palette(dark);
+    let state = state(hwnd);
+    state.theme_bg = bg;
+    state.theme_panel_bg = panel;
+    state.theme_fg = fg;
+
+    if state.hbr_bg != 0 {
+        let _ = DeleteObject(state.hbr_bg);
+        state.hbr_bg = 0;
+    }
+    if state.hbr_panel != 0 {
+        let _ = DeleteObject(state.hbr_panel);
+        state.hbr_panel = 0;
+    }
+    state.hbr_bg = CreateSolidBrush(bg);
+    state.hbr_panel = CreateSolidBrush(panel);
+
+    (bg, panel, fg, line)
+}
+
 unsafe fn apply_theme(hwnd: HWND, dark: bool) {
     let value: u32 = if dark { 1 } else { 0 };
     let _ = DwmSetWindowAttribute(
@@ -1357,11 +1661,7 @@ unsafe fn apply_theme(hwnd: HWND, dark: bool) {
     );
 
     let state = state(hwnd);
-    let (bg, fg, line) = if dark {
-        (0x00202020u32, 0x00E0E0E0u32, 0x00303030u32)
-    } else {
-        (0x00FFFFFFu32, 0x00000000u32, 0x00C0C0C0u32)
-    };
+    let (bg, _panel, fg, line) = update_theme_resources(hwnd, dark);
     let theme = if dark { wide("DarkMode_Explorer") } else { wide("Explorer") };
 
     if state.hwnd_tabs != 0 {
@@ -1493,6 +1793,7 @@ unsafe fn import_project(hwnd: HWND) -> Result<(), String> {
             state.current_doc_dirty = false;
             state.filter_text.clear();
             state.last_highlight_line = -1;
+            state.last_highlight_bold = false;
             state.undo_stack.clear();
             state.redo_stack.clear();
             state.dragging = false;
