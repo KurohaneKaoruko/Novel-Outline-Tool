@@ -1,0 +1,43 @@
+ [package]
+ name = "novel-outline-tool"
+ version = "0.1.0"
+ edition = "2021"
+ rust-version = "1.75"
+ 
+ [dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+windows = { version = "0.56", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_Com",
+  "Win32_UI_Controls_RichEdit",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+ windows-sys = { version = "0.52", features = [
+   "Win32_Foundation",
+   "Win32_Graphics_Gdi",
+  "Win32_Networking_WinHttp",
+  "Win32_Storage_FileSystem",
+   "Win32_System_Com",
+   "Win32_System_LibraryLoader",
+   "Win32_System_SystemServices",
+   "Win32_System_Threading",
+   "Win32_System_WindowsProgramming",
+   "Win32_UI_Controls",
+   "Win32_UI_HiDpi",
+   "Win32_UI_Input_KeyboardAndMouse",
+   "Win32_UI_Shell",
+   "Win32_UI_WindowsAndMessaging",
+ ] }
+ 
+ [profile.release]
+ lto = true
+ codegen-units = 1
+ panic = "abort"
+ strip = true
+
+[build-dependencies]
+embed-resource = "2"
